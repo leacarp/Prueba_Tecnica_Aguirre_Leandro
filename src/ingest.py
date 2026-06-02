@@ -55,7 +55,7 @@ def read_file(path):
 
 # ── 2. LIMPIEZA DE TEXTO 
 
-def clean_text(text)
+def clean_text(text):
     lines = text.splitlines()
     cleaned = []
     for line in lines:
