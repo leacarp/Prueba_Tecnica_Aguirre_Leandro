@@ -1,0 +1,262 @@
+{
+  "name": "Prueba tecnica - Aguirre Leandro",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Documentación relevante:\n{{ $json.context }}\n\n---\n\nPregunta del usuario:\n{{ $json.question }}",
+        "options": {
+          "systemMessage": "=Eres un asistente de soporte técnico. \nRespondé ÚNICAMENTE basándote en la documentación proporcionada.\nSi la información no está en el contexto, decí explícitamente que no tenés información sobre ese tema.\nNo inventes datos, errores, ni soluciones que no estén en el contexto.\nRespondé en español, de forma clara y concisa.",
+          "maxIterations": 3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        768,
+        96
+      ],
+      "id": "2c27a751-c01b-40fa-9050-d6046c885715",
+      "name": "AI Agent",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        640,
+        304
+      ],
+      "id": "e9846071-4e17-4d21-bc42-8bcfa10e5f86",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "xV7bHjZMiQ3nROxw",
+          "name": "OpenAi - leanaguirre2016@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ask",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -64,
+        0
+      ],
+      "id": "e5be682e-4ce2-4ca8-8efa-6bdff027584a",
+      "name": "Webhook - Recibo consulta",
+      "webhookId": "6180ea63-2bef-4f61-9879-d13a80bbbbbe"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5000/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"{{ $json.body.question }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        144,
+        0
+      ],
+      "id": "a59bc6ec-d886-417d-8f79-f3177a02d7c8",
+      "name": "Peticion al backend"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.first().json.results;\nconst question = $input.first().json.query;\n\nconst SCORE_THRESHOLD = 1.2; // distancia máxima aceptable (puede cambiarse)\n\nconst relevantResults = results.filter(r => r.score < SCORE_THRESHOLD);\n\nif (!relevantResults || relevantResults.length === 0) {\n  return [{\n    json: {\n      no_results: true,\n      question: question,\n      context: \"\"\n    }\n  }];\n}\n\nconst context = relevantResults\n  .map(r => `[Fuente: ${r.source}]\\n${r.text}`)\n  .join(\"\\n\\n---\\n\\n\");\n\nreturn [{\n  json: {\n    no_results: false,\n    question: question,\n    context: context\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        0
+      ],
+      "id": "6acaa3ce-a1a7-48da-8401-4ce9056fcef2",
+      "name": "Verificacion de resultados"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "491b4e03-ef03-433b-8c9d-4c7311b1fd06",
+              "leftValue": "={{ $json.no_results }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        560,
+        0
+      ],
+      "id": "e3dc4659-bb6f-4f87-8079-0f7aba9cae66",
+      "name": "¿Tenemos resultados vacios?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"answer\": \"No encontré información en la documentación disponible para responder tu consulta.\"\n}",
+        "options": {
+          "responseCode": 404,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        784,
+        -144
+      ],
+      "id": "3eab6fb6-abce-4dea-9f9a-4a122a2b7c2f",
+      "name": "404 - No se encontro informacion"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1120,
+        96
+      ],
+      "id": "55ad31c2-99f0-4a11-8f0a-d54dba967a17",
+      "name": "200 - Respuesta de consulta"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "200 - Respuesta de consulta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Recibo consulta": {
+      "main": [
+        [
+          {
+            "node": "Peticion al backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Peticion al backend": {
+      "main": [
+        [
+          {
+            "node": "Verificacion de resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificacion de resultados": {
+      "main": [
+        [
+          {
+            "node": "¿Tenemos resultados vacios?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Tenemos resultados vacios?": {
+      "main": [
+        [
+          {
+            "node": "404 - No se encontro informacion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "34d3a2ab-5024-4d0a-af31-19c5bdf02068",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5603e01baf3d7e37a81c3815d4db130f75dbb50c8f76858ab503404640237454"
+  },
+  "id": "Q1Cc8YBs0p1AxP4y",
+  "tags": []
+}
